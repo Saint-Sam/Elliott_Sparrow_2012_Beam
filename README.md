@@ -54,6 +54,9 @@ Add three layers on top of the existing Phase 2 run:
    - Convert TTMn spikes or thresholded TTMn voltages into left/right TTM twitch impulses.
    - Wild type: bilateral TTM activation, strong downward vertical trace, smaller variable horizontal component.
    - shak-B2: probabilistic unilateral or failed activation.
+   - `phase2_gated_jump`: jump only when the Phase 2 run contains a TTMn spike.
+   - `phase2_gated_shakB2`: use the same Phase 2 spike gate, but with the reduced/opposite-polarity shak-B2 beam response.
+   - `standing_still`: flat no-jump baseline for a fly that does not move.
    - amph26: normal upstream neural activation but greatly reduced TTM muscle gain.
    - parkin25 larva: unchanged contraction amplitude, reduced oscillator frequency.
 
@@ -72,6 +75,8 @@ Add three layers on top of the existing Phase 2 run:
 ## Quick Start
 
 Preferred local workflow: open `notebooks/launch_elliott_sparrow_beam.ipynb` from Jupyter. It provides dropdown/button controls for paper beam waveforms and plots soma voltages from Digifly Phase 2 `records.csv` files.
+
+For causal neural-to-beam runs, choose `phase2_gated_jump` or `phase2_gated_shakB2` in the notebook and paste/select a Phase 2 run folder. If `spike_times.csv` contains a TTMn spike (`10068` or `10110`), the beam jumps at that spike time; if not, the output stays flat. The optional Digifly launch cell includes notebook tunables for GF current clamp, synaptic weight/timing, and GF-to-TTMn gap conductance, with `wildtype_gap`, `shakB2_no_gap`, and `fly_stands_still` presets.
 
 Generate paper proxy waveforms without running NEURON:
 

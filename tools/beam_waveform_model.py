@@ -78,11 +78,20 @@ def _jump_trace(
     phase2_spikes_ms: Iterable[float] | None = None,
     response_probability: float = 1.0,
     unilateral: bool = False,
+    requires_motor_spike: bool = False,
+    gate_source: str = "preset",
 ) -> pd.DataFrame:
     t = _timebase(params.duration_ms, params.dt_ms)
     rng = np.random.default_rng(int(params.seed))
 
     spikes = list(phase2_spikes_ms or [])
+    motor_spike_count = len(spikes)
+    if requires_motor_spike and not spikes:
+        return _standing_trace(
+            params,
+            gate_source=gate_source,
+            phase2_motor_spike_count=motor_spike_count,
+        )
     if not spikes:
         spikes = [params.stim_time_ms + params.jump_latency_ms]
 
@@ -112,7 +121,39 @@ def _jump_trace(
         vertical += rng.normal(0.0, params.noise_sd, size=t.shape)
         horizontal += rng.normal(0.0, params.noise_sd, size=t.shape)
 
-    return _waveform_frame(t, vertical, horizontal, successes=successes)
+    jump_decision = "jump" if successes > 0 else "no_jump"
+    return _waveform_frame(
+        t,
+        vertical,
+        horizontal,
+        successes=successes,
+        jump_decision=jump_decision,
+        gate_source=gate_source,
+        phase2_motor_spike_count=motor_spike_count,
+    )
+
+
+def _standing_trace(
+    params: BeamParams,
+    gate_source: str = "standing_still",
+    phase2_motor_spike_count: int = 0,
+) -> pd.DataFrame:
+    t = _timebase(params.duration_ms, params.dt_ms)
+    rng = np.random.default_rng(int(params.seed))
+    vertical = np.zeros_like(t, dtype=float)
+    horizontal = np.zeros_like(t, dtype=float)
+    if params.noise_sd > 0.0:
+        vertical += rng.normal(0.0, params.noise_sd, size=t.shape)
+        horizontal += rng.normal(0.0, params.noise_sd, size=t.shape)
+    return _waveform_frame(
+        t,
+        vertical,
+        horizontal,
+        successes=0,
+        jump_decision="no_jump",
+        gate_source=gate_source,
+        phase2_motor_spike_count=int(phase2_motor_spike_count),
+    )
 
 
 def _walking_trace(params: BeamParams, force_uN: float = 100.0) -> pd.DataFrame:
@@ -174,7 +215,7 @@ def _larval_trace(params: BeamParams, contractions_per_min: float, force_uN: flo
     return _waveform_frame(t, vertical, horizontal)
 
 
-def _waveform_frame(t_ms: np.ndarray, vertical: np.ndarray, horizontal: np.ndarray, **meta: int) -> pd.DataFrame:
+def _waveform_frame(t_ms: np.ndarray, vertical: np.ndarray, horizontal: np.ndarray, **meta: object) -> pd.DataFrame:
     df = pd.DataFrame(
         {
             "t_ms": t_ms,
@@ -192,6 +233,27 @@ def generate_condition(condition: str, params: BeamParams, phase2_run: Path | No
     condition = str(condition).strip().lower()
     phase2_spikes = _spike_times_from_phase2(phase2_run) if phase2_run else []
 
+    if condition in {"standing_still", "fly_stands_still", "still", "no_jump"}:
+        return _standing_trace(params, gate_source="standing_still", phase2_motor_spike_count=len(phase2_spikes))
+    if condition in {"phase2_gated_jump", "simulation_gated_jump", "digifly_gated_jump", "phase2_escape_jump"}:
+        return _jump_trace(
+            params,
+            amplitude_um=290.0,
+            phase2_spikes_ms=phase2_spikes,
+            requires_motor_spike=True,
+            gate_source="phase2_ttmn_spike",
+        )
+    if condition in {"phase2_gated_shakb2", "phase2_gated_shak-b2", "simulation_gated_shakb2", "phase2_shakb2_jump", "phase2_shak-b2_jump"}:
+        return _jump_trace(
+            params,
+            amplitude_um=290.0,
+            polarity=1.0,
+            phase2_spikes_ms=phase2_spikes,
+            response_probability=1.0,
+            unilateral=True,
+            requires_motor_spike=True,
+            gate_source="phase2_ttmn_spike_shakb2",
+        )
     if condition in {"wildtype_jump", "wildtype_one_leg", "cs_jump"}:
         return _jump_trace(params, amplitude_um=290.0, phase2_spikes_ms=phase2_spikes)
     if condition in {"shakb2_one_leg", "shak-b2_one_leg"}:
@@ -229,6 +291,9 @@ def write_outputs(df: pd.DataFrame, out_dir: Path, condition: str, params: BeamP
         "horizontal_peak_abs": float(np.nanmax(np.abs(df["horizontal"].to_numpy(dtype=float)))),
         "vector_peak": float(np.nanmax(df["vector"].to_numpy(dtype=float))),
         "response_events": int(df.attrs.get("successes", 0)),
+        "jump_decision": df.attrs.get("jump_decision"),
+        "gate_source": df.attrs.get("gate_source"),
+        "phase2_motor_spike_count": int(df.attrs.get("phase2_motor_spike_count", 0)),
         "phase2_run": str(phase2_run) if phase2_run else None,
         "params": params.__dict__,
         "notes": [
@@ -243,7 +308,11 @@ def write_outputs(df: pd.DataFrame, out_dir: Path, condition: str, params: BeamP
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Elliott and Sparrow 2012 flexible-beam proxy waveforms.")
-    parser.add_argument("--condition", default="wildtype_jump", help="Condition name, e.g. wildtype_jump, shakB2_six_leg, amph26_jump, walking, flight_downdraft, parkin25.")
+    parser.add_argument(
+        "--condition",
+        default="wildtype_jump",
+        help="Condition name, e.g. wildtype_jump, phase2_gated_jump, phase2_gated_shakB2, standing_still, walking, flight_downdraft, parkin25.",
+    )
     parser.add_argument("--phase2-run", default=None, help="Optional Phase 2 run directory containing spike_times.csv.")
     parser.add_argument("--out-dir", required=True, help="Output directory for CSV and summary JSON.")
     parser.add_argument("--duration-ms", type=float, default=80.0)
