@@ -66,9 +66,12 @@ Add three layers on top of the existing Phase 2 run:
 
 - `configs/paper_targets.json`: paper-derived target table for figures and genotypes.
 - `configs/digifly_escape_run_template.json`: Phase 2 template for a single escape-circuit run.
+- `notebooks/launch_elliott_sparrow_beam.ipynb`: notebook launcher for beam traces, Phase 2 voltage plots, and optional Digifly escape runs.
 - `tools/beam_waveform_model.py`: standalone waveform generator and Phase 2 spike-to-beam adapter.
 
 ## Quick Start
+
+Preferred local workflow: open `notebooks/launch_elliott_sparrow_beam.ipynb` from Jupyter. It provides dropdown/button controls for paper beam waveforms and plots soma voltages from Digifly Phase 2 `records.csv` files.
 
 Generate paper proxy waveforms without running NEURON:
 
